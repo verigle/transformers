@@ -21,6 +21,7 @@
 
 import math
 from typing import Dict, List, Optional, Union
+from PIL import ImageOps
 
 import numpy as np
 
@@ -94,6 +95,37 @@ def make_batched_videos(videos) -> List[VideoInput]:
         return [list(videos)]
 
     raise ValueError(f"Could not make batched video from {videos}")
+
+
+def padding_image_if_required(image, factor: int = 28, fill_color=(255,255, 255,0)):
+    """
+    如果图像的宽或高小于指定因素，则通过填充扩大图像。
+
+    参数:
+    image - 输入的图像对象。
+    height - 图像的高度。
+    width - 图像的宽度。
+    factor - 指定的填充因素，默认值为28。
+    fill_color - 填充颜色，默认为白色透明。
+
+    返回:
+    填充后的图像对象。
+    """
+    height: int = image.height
+    width: int  = image.width
+    # 检查图像的宽和高是否小于指定因素
+    if height < factor or width < factor:
+        # 计算需要填充的尺寸
+        padding_size = (0, 0, 28-width if width<28 else 0, 28-height if height<28 else 0) 
+
+        # 使用指定的填充颜色对图像进行填充扩展
+        padded_img = ImageOps.expand(image, border=padding_size, fill=fill_color)
+    
+        # 返回填充后的图像
+        return padded_img
+    else:
+        # 如果图像的宽和高都大于等于指定因素，则无需填充，直接返回原图像
+        return image
 
 
 def smart_resize(
@@ -261,10 +293,12 @@ class Qwen2VLImageProcessor(BaseImageProcessor):
             # We assume that all images have the same channel dimension format.
             input_data_format = infer_channel_dimension_format(images[0])
 
-        height, width = get_image_size(images[0], channel_dim=input_data_format)
-        resized_height, resized_width = height, width
+        
         processed_images = []
         for image in images:
+            image = padding_image_if_required(image, factor=self.patch_size * self.merge_size,)
+            height, width = get_image_size(image, channel_dim=input_data_format)
+            resized_height, resized_width = height, width
             if do_resize:
                 resized_height, resized_width = smart_resize(
                     height,
